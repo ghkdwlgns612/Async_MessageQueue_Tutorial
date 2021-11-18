@@ -43,4 +43,11 @@ public class OrderController {
         orderService.orderAsyncResult(prodId);
         return new ResponseEntity<>("", HttpStatus.OK);
     }
+
+    @PostMapping("/kafka/template")
+    public ResponseEntity<String> orderKafkaTemplate(@RequestBody OrderRequestDto orderRequest) { //kafkaTemplate를 이용한 요청입니다.
+        orderService.orderTemplate(orderRequest);
+        return new ResponseEntity<>("주문 요청이 생성되었습니다.", HttpStatus.OK);
+    }
+
 }

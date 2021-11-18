@@ -1,6 +1,5 @@
 package async.example.service;
 
-import async.example.domain.AsyncRequest;
 import async.example.domain.OrderRequestDto;
 import async.example.domain.PayRequestDto;
 import async.example.domain.entity.OrderLog;
@@ -9,7 +8,9 @@ import async.example.domain.entity.repository.OrderLogRepository;
 import async.example.domain.entity.repository.ProductRepository;
 import async.example.domain.enumtype.OrderStatus;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -21,12 +22,15 @@ public class OrderService {
     private static final String paymentUrl = "http://localhost:20002/payment";
     private final OrderLogRepository orderLogRepository;
     private final ProductRepository productRepository;
+    private final KafkaTemplate kafkaTemplate;
 
+    @Autowired
     public OrderService(
-        OrderLogRepository orderLogRepository,
-        ProductRepository productRepository) {
+            OrderLogRepository orderLogRepository,
+            ProductRepository productRepository, KafkaTemplate kafkaTemplate) {
         this.orderLogRepository = orderLogRepository;
         this.productRepository = productRepository;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Transactional
@@ -133,10 +137,34 @@ public class OrderService {
         log.info("주문 상태 변경 및 재고 차감 완료");
     }
 
+    //메세지 큐 토픽에 객체를 전달합니다.
+    public void orderTemplate(OrderRequestDto orderRequestDto) {
+        String topic = "test-lecture-test-topic";
+        Product product = productRepository.findById(orderRequestDto.getProductId())
+                .orElseThrow(() -> new RuntimeException("존재하지 않는 상품입니다."));
+
+        stockCheck(product.getStock(), orderRequestDto.getStock());
+
+        log.info("주문 생성중");
+        OrderLog orderLog = OrderLog.builder()
+                .productId(product.getId())
+                .productName(product.getName())
+                .productPrice(product.getPrice())
+                .orderStock(orderRequestDto.getStock())
+                .status(OrderStatus.ASYNC_ORDER_REQUEST_COMPLETE)
+                .build();
+        orderLogRepository.save(orderLog);
+        log.info("==========주문 내역 생성=============");
+        Long totalPrice = product.getPrice() * orderRequestDto.getStock();
+        PayRequestDto asyncRequest = new PayRequestDto(orderLog.getId(), totalPrice);
+        kafkaTemplate.send(topic, asyncRequest);
+    }
+
     private void stockCheck(Integer prodStock, Integer reqStock) {
         if (prodStock < reqStock) {
             log.error("재고가 부족합니다.");
             throw new RuntimeException("재고가 부족합니다.");
         }
     }
+
 }
