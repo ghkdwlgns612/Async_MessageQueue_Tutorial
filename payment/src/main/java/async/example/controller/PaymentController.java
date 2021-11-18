@@ -1,12 +1,16 @@
 package async.example.controller;
 
 import async.example.domain.AsyncRequest;
+import async.example.domain.PayRequestDto;
 import async.example.service.PayService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping(value = "/payment", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor(onConstructor_ = @Autowired)
+@Slf4j
 public class PaymentController {
 
     private final PayService payService;
@@ -34,5 +39,11 @@ public class PaymentController {
     public ResponseEntity payAsync(@RequestBody final AsyncRequest asyncRequest) {
         new Thread(() -> payService.payTryToSucceed(asyncRequest)).start();
         return new ResponseEntity("결제 요청 완료", HttpStatus.OK);
+    }
+
+    @KafkaListener(topics = "test-lecture-test-topic", groupId = "group_id")
+    public void consume(@Payload(required = false) PayRequestDto payRequestDto) {
+        log.info("id : {}", payRequestDto.getOrderId());
+        log.info("price : {}",payRequestDto.getTotalPrice());
     }
 }
